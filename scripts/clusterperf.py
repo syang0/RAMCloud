@@ -264,6 +264,22 @@ def broadcast(name, options, cluster_args, client_args):
             (obj_path, flatten_args(client_args), name), **cluster_args)
     print(get_client_log(), end='')
 
+def dataViz(name, options, cluster_args, client_args):
+    if 'master_args' not in cluster_args:
+        cluster_args['master_args'] = '--maxCores 2 --totalMasterMemory 1500'
+    if cluster_args['timeout'] < 200:
+        cluster_args['timeout'] = 200
+
+    if '--count' not in client_args:
+        client_args['--count'] = 10
+
+    # Ensure at least 5 hosts for optimal performance
+    if options.num_servers == None:
+        cluster_args['num_servers'] = 8
+    cluster.run(client='%s/ClusterPerf %s %s' %
+            (obj_path, flatten_args(client_args), name), **cluster_args)
+    print(get_client_log(), end='')
+
 def indexBasic(name, options, cluster_args, client_args):
     if 'master_args' not in cluster_args:
         cluster_args['master_args'] = '--maxCores 2 --totalMasterMemory 1500'
@@ -624,7 +640,8 @@ simple_tests = [
     Test("broadcast", broadcast),
     Test("netBandwidth", netBandwidth),
     Test("readAllToAll", readAllToAll),
-    Test("readNotFound", default)
+    Test("readNotFound", default),
+    Test("dataViz", dataViz),
 ]
 
 graph_tests = [

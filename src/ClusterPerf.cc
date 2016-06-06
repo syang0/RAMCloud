@@ -2491,6 +2491,138 @@ indexLookupCommon(bool doIndexRange, uint32_t samplesPerOp)
 }
 
 void
+dataViz() {
+    uint16_t keyLength = 30;
+    uint32_t valLen = 100;
+    uint16_t serverSpan = 8;
+    char pk[keyLength], sk[keyLength], val[valLen];
+
+    KeyInfo keyList[2];
+    keyList[0].key = pk;
+    keyList[1].key = sk;
+
+    keyList[0].keyLength = keyLength;
+    keyList[1].keyLength = keyLength;
+
+    printf("Starting\r\n");
+    std::vector<double> timeWrites(count),
+                        timeLookups(2*count),
+                        timeIndexWrites(count),
+                        timeIndexLookups(count);
+
+    // Create data table
+    uint64_t tableId = cluster->createTable("dataVizNorm", serverSpan);
+
+    // Write 10 objects with no indexes
+    for (int i = 0; i < count; ++i) {
+        snprintf(pk, keyLength, "p%0*d", keyLength - 2, i);
+        snprintf(val, valLen, "v%0*d", valLen - 2, i);
+        uint64_t start = Cycles::rdtsc();
+        cluster->write(tableId, pk, keyLength, val, valLen);
+        uint64_t stop = Cycles::rdtsc();
+        timeWrites[i] = Cycles::toSeconds(stop - start);
+    }
+
+    // Perform 20 random lookups
+    for (int i = 0; i < 2*count; ++i) {
+        Buffer b;
+        uint32_t id = randomNumberGenerator(count);
+
+        uint64_t start = Cycles::rdtsc();
+        snprintf(pk, keyLength, "p%0*d", keyLength - 2, id);
+        cluster->read(tableId, pk, keyLength, &b);
+        uint64_t stop = Cycles::rdtsc();
+        timeLookups[i] = Cycles::toSeconds(stop - start);
+
+        assert(b.size() > 0);
+        b.reset();
+    }
+
+    // Drop the table and create a new table with indexlets!
+    tableId = cluster->createTable("dataVizWithIndex", serverSpan);
+    cluster->createIndex(tableId, uint8_t(1),uint8_t(0), uint8_t(serverSpan));
+
+    // Write 10 new objects!
+    for (int i = 0; i < count; ++i) {
+        char indexIdent = static_cast<char>(('a') + i);
+        snprintf(pk, keyLength, "%c:%dp%0*d", indexIdent, i, keyLength, 0);
+        snprintf(sk, keyLength, "%c:s%0*d", indexIdent, keyLength-4, i);
+
+        uint64_t start = Cycles::rdtsc();
+        cluster->write(tableId, uint8_t(2), keyList, val, NULL, NULL, false);
+        uint64_t stop = Cycles::rdtsc();
+        timeIndexWrites[i] = Cycles::toSeconds(stop - start);
+    }
+
+    // Read 10 objects through point secondary index lookups
+    for (int i = 0; i < count; ++i) {
+        uint32_t id = randomNumberGenerator(count);
+        char indexIdent = static_cast<char>(('a') + id);
+        snprintf(sk, keyLength, "%c:s%0*d", indexIdent, keyLength-4, id);
+
+        uint64_t start = Cycles::rdtsc();
+        IndexKey::IndexKeyRange keyRange(1U,
+                sk, keyLength, /*first key*/
+                sk, keyLength /*last key*/);
+        IndexLookup rangeLookup(cluster, tableId, keyRange);
+
+        int cnt = 0;
+        while(rangeLookup.getNext())
+            cnt++;
+
+        uint64_t stop = Cycles::rdtsc();
+
+        timeIndexLookups[i] = Cycles::toSeconds(stop - start);
+        assert(cnt == 1);
+    }
+
+    // Read 10 object through a single lookup.
+    char sk2[keyLength];
+    uint32_t id = 0;
+    char indexIdent = static_cast<char>(('a') + id);
+    snprintf(sk, keyLength, "%c:s%0*d", indexIdent, keyLength-4, id);
+
+    id = serverSpan;
+    indexIdent = static_cast<char>(('a') + id);
+    snprintf(sk2, keyLength, "%c:s%0*d", indexIdent, keyLength-4, id);
+
+    uint64_t start = Cycles::rdtsc();
+    IndexKey::IndexKeyRange keyRange(1U,
+        sk, keyLength, /*first key*/
+        sk2, keyLength /*last key*/);
+    IndexLookup rangeLookup(cluster, tableId, keyRange);
+
+    int cnt = 0;
+    while(rangeLookup.getNext())
+        cnt++;
+    uint64_t stop = Cycles::rdtsc();
+
+    assert(cnt == count);
+
+    printf("Normal writes: ");
+    for (double t : timeWrites) {
+        printf("%2.2lf ", t*1e6);
+    }
+
+    printf("\r\nNormal reads: ");
+    for (double t : timeLookups) {
+        printf("%2.2lf ", t*1e6);
+    }
+
+    printf("\r\nIndex writes: ");
+    for (double t : timeIndexWrites) {
+        printf("%2.2lf ", t*1e6);
+    }
+
+    printf("\r\n Index Reads: ");
+    for (double t : timeIndexLookups) {
+        printf("%2.2lf ", t*1e6);
+    }
+
+    printf("\r\n Single 10 lookup: %2.2lf µs\r\n", 1e6*Cycles::toSeconds(stop-start));
+}
+
+void
 indexBasic()
 {
     // all keys (including primary key) will be 30 bytes long
@@ -6043,6 +6175,7 @@ struct TestInfo {
 TestInfo tests[] = {
     {"basic", basic},
     {"broadcast", broadcast},
+    {"dataViz", dataViz},
     {"indexBasic", indexBasic},
     {"indexRange", indexRange},
     {"indexMultiple", indexMultiple},

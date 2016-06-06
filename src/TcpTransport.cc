@@ -317,6 +317,11 @@ TcpTransport::ServerSocketHandler::handleFileEvent(int events)
                 // The incoming request is complete; pass it off for servicing.
                 TcpServerRpc *rpc = socket->rpc;
                 socket->rpc = NULL;
+
+                LOG(ERROR, "Received %s request from %s with %u bytes",
+                        WireFormat::opcodeSymbol(&rpc->requestPayload),
+                        rpc->getClientServiceLocator().c_str(),
+                        rpc->requestPayload.size());
                 transport->context->workerManager->handleRpc(rpc);
             }
         }
@@ -831,6 +836,10 @@ TcpTransport::TcpSession::sendRequest(Buffer* request, Buffer* response,
         return;
     }
 
+    LOG(ERROR, "Sending %s request to %s with %u bytes",
+            WireFormat::opcodeSymbol(request), getServiceLocator().c_str(),
+            request->size());
+
     // Try to transmit the request.
     try {
         bytesLeftToSend = TcpTransport::sendMessage(fd, rpc->nonce,
@@ -893,6 +902,12 @@ TcpTransport::ClientSocketHandler::handleFileEvent(int events)
                             *session->current));
                     session->alarm.rpcFinished();
                     session->current->notifier->completed();
+
+                    LOG(ERROR, "Received %s response from %s with %u bytes",
+                            WireFormat::opcodeSymbol(session->current->request),
+                            session->getServiceLocator().c_str(),
+                            session->current->response->size());
+
                     session->transport->clientRpcPool.destroy(session->current);
                     session->current = NULL;
                 }
@@ -933,6 +948,12 @@ TcpTransport::TcpServerRpc::sendReply()
         // new connection); if so, just discard the RPC without sending
         // a response.
         if ((socket != NULL) && (socket->id == socketId)) {
+
+            LOG(ERROR, "Sending %s response to %s with %u bytes",
+                    WireFormat::opcodeSymbol(&requestPayload),
+                    this->getClientServiceLocator().c_str(),
+                    replyPayload.size());
+
             if (!socket->rpcsWaitingToReply.empty()) {
                 // Can't transmit the response yet; the socket is backed up.
                 socket->rpcsWaitingToReply.push_back(*this);

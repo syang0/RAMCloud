@@ -158,13 +158,13 @@ FailureDetector::pingRandomServer()
     string locator;
     try {
         locator = context->serverList->getLocator(pingee);
-        LOG(DEBUG, "Sending ping to server %s (%s)", pingee.toString().c_str(),
+        LOG(ERROR, "Sending ping to server %s (%s)", pingee.toString().c_str(),
             locator.c_str());
         uint64_t start = Cycles::rdtsc();
         PingRpc rpc(context, pingee, ourServerId);
         if (rpc.wait(TIMEOUT_USECS *1000)) {
             probesWithoutResponse = 0;
-            LOG(DEBUG, "Ping succeeded to server %s (%s) in %.1f us",
+            LOG(ERROR, "Ping succeeded to server %s (%s) in %.1f us",
                 pingee.toString().c_str(), locator.c_str(),
                 1e06*Cycles::toSeconds(Cycles::rdtsc() - start));
         } else {

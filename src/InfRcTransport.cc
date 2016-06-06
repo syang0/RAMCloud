@@ -525,7 +525,7 @@ InfRcTransport::InfRcSession::sendRequest(Buffer* request,
         return;
     }
 
-    LOG(DEBUG, "Sending %s request to %s with %u bytes",
+    LOG(ERROR, "Sending %s request to %s with %u bytes",
             WireFormat::opcodeSymbol(request), getServiceLocator().c_str(),
             request->size());
     if (request->size() > t->getMaxRpcSize()) {
@@ -1383,7 +1383,7 @@ InfRcTransport::Poller::poll()
                                                  bd->buffer + sizeof(header),
                                                  len, t, t->clientSrq, bd);
                 }
-                LOG(DEBUG, "Received %s response from %s with %u bytes",
+                LOG(ERROR, "Received %s response from %s with %u bytes",
                         WireFormat::opcodeSymbol(rpc.request),
                         rpc.session->getServiceLocator().c_str(),
                         rpc.response->size());
